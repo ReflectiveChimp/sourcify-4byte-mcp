@@ -1,6 +1,6 @@
 {
   "name": "sourcify-4byte-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server that decodes EVM function/error/event signatures via the Sourcify 4byte API",
   "type": "module",
   "license": "MIT",
