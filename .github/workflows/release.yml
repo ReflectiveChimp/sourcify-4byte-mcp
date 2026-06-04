@@ -1,0 +1,63 @@
+name: Release
+
+# Bumps the version, then publishes to npm via OIDC Trusted Publishing
+# (no tokens) with build provenance — but only after the full CI gate passes.
+#
+# ┌─ ONE-TIME SETUP on npmjs.com (required; cannot be automated from here) ─┐
+# │ npmjs.com → the package → Settings → Trusted Publishing → Add publisher │
+# │   Provider:    GitHub Actions                                          │
+# │   Organization/Owner + Repository: ReflectiveChimp/sourcify-4byte-mcp  │
+# │   Workflow filename: release.yml                                       │
+# │ Until that is configured, the publish step fails with an auth error.   │
+# └────────────────────────────────────────────────────────────────────────┘
+#
+# Run it from the Actions tab → Release → Run workflow → pick patch/minor/major.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semver bump for this release
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+# Never let two releases run at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Reuse the exact CI gate (typecheck / lint / test / build + node-compat).
+  # `publish` depends on this, so nothing ships unless every CI job is green.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the version-bump commit + tag back to the repo
+      id-token: write # OIDC for npm Trusted Publishing + provenance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Update npm
+        run: npm install -g npm@latest
+      - run: bun install --frozen-lockfile
+      - name: Bump version, commit, and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version ${{ inputs.bump }} -m "release: v%s"
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+      - name: Push release commit and tag
+        run: git push --follow-tags
